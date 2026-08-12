@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "unknown_agent_decision": "allow",
+  "agents": {
+    "test-writer-red": {
+      "edit": {
+        "rules": [
+          { "match": ["**/*_test.go", "**/testdata/**"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "test-writer-red may only edit *_test.go files or paths under testdata/" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["make test"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "test-writer-red may only run \"make test\"" }
+      }
+    },
+    "implementer-green": {
+      "edit": {
+        "rules": [
+          { "match": ["**/*_test.go"], "decision": "deny", "reason": "implementer-green may not edit test files" },
+          { "match": ["**/*.go"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "implementer-green may only edit non-test .go files" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["make build", "make vet", "make test", "make check"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "implementer-green may only run make build/vet/test/check" }
+      }
+    },
+    "refactor": {
+      "edit": {
+        "rules": [
+          { "match": ["**/*_test.go", "Makefile"], "decision": "deny", "reason": "refactor may not edit test files or the Makefile" },
+          { "match": ["**/*.go"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "refactor may only edit non-test .go files" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["make build", "make vet", "make test", "make check", "make bench"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "refactor may only run make build/vet/test/check/bench" }
+      }
+    },
+    "doc-scribe": {
+      "edit": {
+        "rules": [
+          { "match": ["docs/specifications/**", "docs/adr/**"], "decision": "deny", "reason": "doc-scribe may not edit specs or recorded decisions -- needs a human, not this agent" },
+          { "match": ["**/*.md", "standards/*.yaml", "standards/*.yml"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "doc-scribe may only edit markdown files (anywhere) or standards/*.yaml" }
+      }
+    }
+  }
+}

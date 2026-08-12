@@ -1,0 +1,45 @@
+# Optional. Copy into <installing-repo>/.claude/agentic-dev/issue-conventions.yaml
+# only if this repo wants an enforced title-prefix/numbering scheme for
+# its work items (Epic/Feature/Task/Design/Bug-style hierarchies), the
+# way KillianW/rkg uses EPIC-N/FEATURE-N.M/TASK-N.M.P/DESIGN-N.M/BUG-N.M
+# (ADR-0003/ADR-0014 in that repo). If this file is absent,
+# github-issue-manager falls back to plain issue titles with no enforced
+# prefix or numbering scheme at all -- a perfectly normal way to run
+# GitHub Issues, and the right default for a repo that hasn't adopted
+# (or doesn't want) rkg's specific convention.
+#
+# The shape below mirrors rkg's own scheme as a real, working example --
+# adapt the prefixes/hierarchy or delete types you don't need.
+version: 1
+enabled: true
+
+types:
+  epic:
+    prefix: "EPIC-{n}"
+    numbering: sequential
+    has_parent: false
+  feature:
+    prefix: "FEATURE-{epic}.{n}"
+    numbering: sequential-within-parent
+    has_parent: epic
+  task:
+    prefix: "TASK-{epic}.{feature}.{n}"
+    numbering: sequential-within-parent
+    has_parent: feature
+    # A task not worth its own feature uses feature index 0, e.g.
+    # TASK-3.0.1 -- rkg's own convention for a task too small to
+    # justify a dedicated feature, still requiring a parent epic.
+    unfeatured_slot: 0
+  design:
+    prefix: "DESIGN-{epic}.{n}"
+    numbering: sequential-within-parent
+    has_parent: epic
+  bug:
+    # A bug MAY have a parent epic (BUG-{epic}.{n}) or be flat
+    # (BUG-{n}, its own independent sequence) when no parent epic
+    # genuinely applies -- see github-issue-manager.md for the
+    # decision rule between the two.
+    prefix_scoped: "BUG-{epic}.{n}"
+    prefix_flat: "BUG-{n}"
+    numbering: sequential-within-parent-or-flat
+    has_parent: optional

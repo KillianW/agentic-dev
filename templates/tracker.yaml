@@ -1,0 +1,35 @@
+# Tracker binding for agentic-dev's pipeline agents. Copy this into
+# <installing-repo>/.claude/agentic-dev/tracker.yaml and edit if needed --
+# as shipped, this binds to GitHub Issues via the `github` MCP server
+# (see ../.mcp.json) and is usable as-is for a GitHub-Issues-tracked repo.
+#
+# Every ported agent's prose refers to "your configured tracker's
+# <operation>" rather than naming an MCP tool directly, so this file is
+# the one place that mapping lives. Adding a second tracker (Jira,
+# Linear, plain local files, ...) means: (1) a new tracker.yaml binding
+# like this one, naming that tracker's own tool/operation, and (2) a
+# mechanical per-agent frontmatter edit adding whatever tool names that
+# second tracker needs -- unavoidable, since subagent tool access is
+# granted by literal tool name in YAML frontmatter, a Claude Code
+# platform constraint this file can't route around. What this file DOES
+# buy: the agents' own prose bodies never need rewriting for a new
+# tracker, only their frontmatter tools: list and this binding.
+version: 1
+tracker: github-issues
+
+operations:
+  get_item:
+    tool: mcp__github__issue_read
+    args_template: { method: get, issue_number: "{id}" }
+  list_items:
+    tool: mcp__github__list_issues
+  search_items:
+    tool: mcp__github__search_issues
+  create_pr:
+    tool: mcp__github__create_pull_request
+  get_pr_checks:
+    tool: mcp__github__pull_request_read
+    args_template: { method: get_check_runs }
+  merge_pr:
+    tool: mcp__github__merge_pull_request
+    args_template: { merge_method: squash }

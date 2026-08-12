@@ -1,0 +1,52 @@
+# Optional. Copy into <installing-repo>/.claude/agentic-dev/perf-policy.yaml
+# only if this repo has hot-path benchmarks worth gating against
+# regressions during the Refactor stage. Most repos won't have this file
+# -- refactor.md skips its benchmark-classification step entirely when
+# it's absent, no error, no warning.
+#
+# This shape generalizes the two-gate policy pattern from the origin
+# project's ADR-0018 (a relative-percent gate AND an absolute-time gate,
+# judged independently -- clearing one never excuses the other -- plus a
+# perceptual-tier boundary-crossing rule). The underlying reasoning is
+# genuinely reusable; the concrete numbers below are the origin
+# project's own calibration for its own latency-sensitivity story (a
+# server queried repeatedly per agent session) -- replace them with
+# numbers that make sense for this repo's own hot paths, or delete
+# sections/bands you don't need.
+version: 1
+
+benchmark_command: "make bench"   # replace with this repo's own invocation
+
+# Which packages/modules trigger benchmark classification during
+# Refactor -- typically "anything a committed benchmark already covers,
+# transitively through its own call graph." List them explicitly; there
+# is no auto-discovery.
+covered_packages:
+  - example/hot-path-package
+
+baseline_file: "path/to/benchmark-baseline.txt"  # committed, human-updated on accept
+
+gates:
+  relative:
+    negligible_below_pct: 5
+    triage_below_pct: 10
+    # >= triage_below_pct is reject-by-default unless explicitly justified.
+
+  absolute:
+    # Multiple consumer "bands" are supported because the same
+    # percentage means very different things at different baseline
+    # sizes and different callers' latency tolerance. Define as many
+    # bands as this repo needs; refactor.md's prompt should say which
+    # band governs which benchmark case (or default to the strictest
+    # if only one caller matters).
+    bands:
+      - name: default
+        negligible_below_ms: 100
+        triage_below_ms: 1000
+        # >= triage_below_ms is reject-by-default unless explicitly justified.
+
+  perceptual_tiers_ms: [1000, 10000]
+  # Crossing one of these total-time thresholds is always "significant"
+  # regardless of relative/absolute delta size (Nielsen-style perceptual
+  # anchoring: a jump from "instant" to "noticeable delay," or from
+  # "noticeable" to "loses attention," matters on its own terms).
