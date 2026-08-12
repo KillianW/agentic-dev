@@ -1,0 +1,4 @@
+# Local dev/test scratch, if this repo is ever cloned and iterated on directly.
+node_modules/
+*.log
+.DS_Store

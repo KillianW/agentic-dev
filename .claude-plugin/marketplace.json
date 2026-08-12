@@ -1,0 +1,13 @@
+{
+  "name": "agentic-dev-marketplace",
+  "owner": {
+    "name": "Killian Walsh"
+  },
+  "plugins": [
+    {
+      "name": "agentic-dev",
+      "source": "./",
+      "description": "A generalized, hook-enforced six-agent TDD feature-delivery pipeline."
+    }
+  ]
+}

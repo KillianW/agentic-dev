@@ -1,0 +1,33 @@
+{
+  "name": "agentic-dev",
+  "version": "0.1.0",
+  "description": "A six-agent TDD feature-delivery pipeline (plan -> red -> green -> refactor -> document -> audit) with structural, hook-enforced per-stage scope, extracted and generalized from a working system built and dogfooded in a private Go project (KillianW/rkg). First-draft port: see docs/ROADMAP.md for what's proven vs. untested.",
+  "author": {
+    "name": "Killian Walsh"
+  },
+  "hooks": "./hooks/hooks.json",
+  "userConfig": {
+    "repo_owner": {
+      "type": "string",
+      "title": "Repository owner",
+      "description": "The GitHub org/user that owns the repository this plugin is installed into (e.g. \"KillianW\"). Substituted into agent/skill prose as ${user_config.repo_owner}."
+    },
+    "repo_name": {
+      "type": "string",
+      "title": "Repository name",
+      "description": "The repository's name on GitHub (e.g. \"rkg\"). Substituted as ${user_config.repo_name}."
+    },
+    "default_branch": {
+      "type": "string",
+      "title": "Default branch",
+      "description": "The branch new work branches from and ships back to.",
+      "default": "main"
+    },
+    "tracker_id": {
+      "type": "string",
+      "title": "Tracker identifier",
+      "description": "A human-readable label for the work-item tracker this repo uses. The real operation bindings live in .claude/agentic-dev/tracker.yaml (see templates/tracker.yaml) -- this field is prose-substitution only.",
+      "default": "github-issues"
+    }
+  }
+}
