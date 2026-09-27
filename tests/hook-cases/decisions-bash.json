@@ -1,0 +1,96 @@
+{
+  "config": {
+    "version": 1,
+    "agents": {
+      "tdd-red": {
+        "edit": { "rules": [{ "match": ["tests/**"], "decision": "allow" }], "default": { "decision": "deny" } },
+        "bash": {
+          "rules": [{ "match_exact": ["pytest"], "decision": "allow" }],
+          "default": { "decision": "deny", "reason": "tdd-red may only run \"pytest\"" }
+        }
+      },
+      "tdd-green": {
+        "edit": { "rules": [{ "match": ["src/**"], "decision": "allow" }], "default": { "decision": "deny" } },
+        "bash": {
+          "rules": [{ "match_exact": ["pytest", "ruff check ."], "decision": "allow" }],
+          "default": { "decision": "deny", "reason": "tdd-green may only run pytest / ruff check ." }
+        }
+      },
+      "tdd-refactor": {
+        "edit": { "rules": [{ "match": ["src/**"], "decision": "allow" }], "default": { "decision": "deny" } },
+        "bash": {
+          "rules": [
+            { "match_exact": ["pytest --benchmark-only"], "decision": "allow" },
+            { "match_exact": ["pytest", "ruff check ."], "decision": "allow" }
+          ],
+          "default": { "decision": "deny", "reason": "tdd-refactor may only run pytest / ruff / benchmarks" }
+        }
+      },
+      "scribe": {
+        "edit": { "rules": [{ "match": ["**/*.md"], "decision": "allow" }], "default": { "decision": "deny" } }
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "red: the one configured command is allowed",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Bash", "tool_input": { "command": "pytest" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "red: surrounding whitespace is trimmed before comparing",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Bash", "tool_input": { "command": "  pytest \n" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "red: chaining is denied (exact match only)",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Bash", "tool_input": { "command": "pytest && rm -rf /" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "may only run \"pytest\"" }
+    },
+    {
+      "name": "red: extra arguments are denied (exact match only)",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Bash", "tool_input": { "command": "pytest -k foo" } },
+      "expect": { "exit": 0, "decision": "deny" }
+    },
+    {
+      "name": "red: read-only exploration is still denied",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Bash", "tool_input": { "command": "ls" } },
+      "expect": { "exit": 0, "decision": "deny" }
+    },
+    {
+      "name": "red: PowerShell is scoped like Bash",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "PowerShell", "tool_input": { "command": "pytest" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "red: PowerShell with an unlisted command is denied",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "PowerShell", "tool_input": { "command": "Remove-Item -Recurse src" } },
+      "expect": { "exit": 0, "decision": "deny" }
+    },
+    {
+      "name": "green: a command with internal spaces matches exactly",
+      "payload": { "agent_type": "kw-ad:tdd-green", "tool_name": "Bash", "tool_input": { "command": "ruff check ." } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "green: a refactor-only command is denied",
+      "payload": { "agent_type": "kw-ad:tdd-green", "tool_name": "Bash", "tool_input": { "command": "pytest --benchmark-only" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "tdd-green may only run" }
+    },
+    {
+      "name": "refactor: rules across several entries are all considered",
+      "payload": { "agent_type": "kw-ad:tdd-refactor", "tool_name": "Bash", "tool_input": { "command": "pytest --benchmark-only" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "scribe: an agent with no bash section is denied Bash (fail closed)",
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "Bash", "tool_input": { "command": "ls" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "no \"bash\" rules" }
+    },
+    {
+      "name": "a missing command is compared as the empty string",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Bash", "tool_input": {} },
+      "expect": { "exit": 0, "decision": "deny" }
+    }
+  ]
+}

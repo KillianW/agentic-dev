@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }}, python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest supported runtimes.
+          - { os: ubuntu-22.04, node: "18", python: "3.8" }
+          # Current runtimes on every OS the hook has to run on.
+          - { os: ubuntu-latest, node: "22", python: "3.13" }
+          - { os: macos-latest, node: "22", python: "3.13" }
+          - { os: windows-latest, node: "22", python: "3.13" }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Node suites
+        run: node --test tests/node/*.test.mjs
+      - name: Python suites
+        run: python -m unittest discover -s tests/python -v
+
+  validate:
+    name: claude plugin validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install -g @anthropic-ai/claude-code
+      - run: claude plugin validate .
+      - run: claude plugin validate plugins/kw-ad

@@ -1,0 +1,130 @@
+{
+  "config": {
+    "version": 1,
+    "unknown_agent_decision": "allow",
+    "agents": {
+      "tdd-red": {
+        "edit": {
+          "rules": [{ "match": ["**/*_test.go", "**/testdata/**"], "decision": "allow" }],
+          "default": { "decision": "deny", "reason": "tdd-red may only edit *_test.go files or paths under testdata/" }
+        },
+        "bash": {
+          "rules": [{ "match_exact": ["make test"], "decision": "allow" }],
+          "default": { "decision": "deny", "reason": "tdd-red may only run \"make test\"" }
+        }
+      },
+      "tdd-green": {
+        "edit": {
+          "rules": [
+            { "match": ["**/*_test.go"], "decision": "deny", "reason": "tdd-green may not edit test files" },
+            { "match": ["**/*.go"], "decision": "allow" }
+          ],
+          "default": { "decision": "deny", "reason": "tdd-green may only edit non-test .go files" }
+        },
+        "bash": {
+          "rules": [{ "match_exact": ["make build", "make test"], "decision": "allow" }],
+          "default": { "decision": "deny", "reason": "tdd-green may only run make build/test" }
+        }
+      },
+      "tdd-refactor": {
+        "edit": {
+          "rules": [
+            { "match": ["**/*_test.go", "Makefile"], "decision": "deny", "reason": "tdd-refactor may not edit test files or the Makefile" },
+            { "match": ["**/*.go"], "decision": "allow" }
+          ],
+          "default": { "decision": "deny", "reason": "tdd-refactor may only edit non-test .go files" }
+        },
+        "bash": {
+          "rules": [{ "match_exact": ["make test"], "decision": "allow" }],
+          "default": { "decision": "deny" }
+        }
+      },
+      "scribe": {
+        "edit": {
+          "rules": [
+            { "match": ["docs/specifications/**", "docs/adr/**"], "decision": "deny", "reason": "scribe may not edit specs or recorded decisions" },
+            { "match": ["**/*.md", "standards/*.yaml"], "decision": "allow" }
+          ],
+          "default": { "decision": "deny", "reason": "scribe may only edit markdown files or standards/*.yaml" }
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "red: allows a nested test file (absolute path)",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Edit", "tool_input": { "file_path": "{project}/internal/mcp/accept_test.go" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "red: allows a testdata fixture (relative path)",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Write", "tool_input": { "file_path": "internal/testdata/fixture.json" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "red: denies production code with the configured reason",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Edit", "tool_input": { "file_path": "{project}/internal/mcp/accept.go" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "tdd-red may only edit" }
+    },
+    {
+      "name": "red: a traversal that resolves to production code is denied",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Edit", "tool_input": { "file_path": "{project}/internal/testdata/../accept.go" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "tdd-red may only edit" }
+    },
+    {
+      "name": "green: first match wins, so a test file is denied even though it matches **/*.go",
+      "payload": { "agent_type": "kw-ad:tdd-green", "tool_name": "Edit", "tool_input": { "file_path": "{project}/internal/mcp/accept_test.go" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "may not edit test files" }
+    },
+    {
+      "name": "green: allows non-test production code",
+      "payload": { "agent_type": "kw-ad:tdd-green", "tool_name": "Write", "tool_input": { "file_path": "{project}/internal/mcp/accept.go" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "green: MultiEdit is scoped like Edit",
+      "payload": { "agent_type": "kw-ad:tdd-green", "tool_name": "MultiEdit", "tool_input": { "file_path": "{project}/README.md" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "may only edit non-test .go files" }
+    },
+    {
+      "name": "refactor: denies the Makefile",
+      "payload": { "agent_type": "kw-ad:tdd-refactor", "tool_name": "Edit", "tool_input": { "file_path": "{project}/Makefile" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "or the Makefile" }
+    },
+    {
+      "name": "scribe: hard-denies a frozen spec",
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "Edit", "tool_input": { "file_path": "{project}/docs/specifications/v1/SPEC-0004.md" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "specs or recorded decisions" }
+    },
+    {
+      "name": "scribe: allows markdown anywhere else",
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "Write", "tool_input": { "file_path": "{project}/docs/planning/history/FEATURE-1.2.md" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "scribe: denies source code",
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "Edit", "tool_input": { "file_path": "{project}/main.go" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "only edit markdown" }
+    },
+    {
+      "name": "scribe: NotebookEdit is scoped by notebook_path",
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "NotebookEdit", "tool_input": { "notebook_path": "{project}/analysis.ipynb" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "only edit markdown" }
+    },
+    {
+      "name": "a path outside the project is denied regardless of rules",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Edit", "tool_input": { "file_path": "{project}/../elsewhere/x_test.go" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "outside the project" }
+    },
+    {
+      "name": "an edit with no file path is denied",
+      "payload": { "agent_type": "kw-ad:tdd-green", "tool_name": "Edit", "tool_input": {} },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "no file path" }
+    },
+    {
+      "name": "a deny default with no reason gets a generated reason",
+      "payload": { "agent_type": "kw-ad:tdd-refactor", "tool_name": "Bash", "tool_input": { "command": "rm -rf /" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "denied by tdd-refactor's bash scope rules" }
+    }
+  ]
+}

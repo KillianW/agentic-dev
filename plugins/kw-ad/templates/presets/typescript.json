@@ -1,0 +1,83 @@
+{
+  "$comment": "kw-ad scope rules preset: TypeScript/JavaScript with npm scripts (tests named *.test.* / *.spec.* or under __tests__/). Replace the commands with this repo's real ones (pnpm, yarn, specific scripts); they are exact-match strings. Config files (package.json, tsconfig, lockfiles) are out of scope for every code stage by default. See templates/README.md.",
+  "version": 1,
+  "unknown_agent_decision": "allow",
+  "agents": {
+    "tdd-red": {
+      "edit": {
+        "rules": [
+          {
+            "match": [
+              "**/*.test.ts", "**/*.test.tsx", "**/*.test.js", "**/*.test.jsx",
+              "**/*.spec.ts", "**/*.spec.tsx", "**/*.spec.js", "**/*.spec.jsx",
+              "**/__tests__/**", "**/__fixtures__/**"
+            ],
+            "decision": "allow"
+          }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-red may only edit test files (*.test.*, *.spec.*, __tests__/, __fixtures__/)" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["npm test"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-red may only run \"npm test\"" }
+      }
+    },
+    "tdd-green": {
+      "edit": {
+        "rules": [
+          {
+            "match": [
+              "**/*.test.ts", "**/*.test.tsx", "**/*.test.js", "**/*.test.jsx",
+              "**/*.spec.ts", "**/*.spec.tsx", "**/*.spec.js", "**/*.spec.jsx",
+              "**/__tests__/**", "**/__fixtures__/**"
+            ],
+            "decision": "deny",
+            "reason": "tdd-green may not edit tests"
+          },
+          { "match": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-green may only edit non-test source files" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["npm test", "npm run build", "npm run lint"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-green may only run npm test / npm run build / npm run lint" }
+      }
+    },
+    "tdd-refactor": {
+      "edit": {
+        "rules": [
+          {
+            "match": [
+              "**/*.test.ts", "**/*.test.tsx", "**/*.test.js", "**/*.test.jsx",
+              "**/*.spec.ts", "**/*.spec.tsx", "**/*.spec.js", "**/*.spec.jsx",
+              "**/__tests__/**", "**/__fixtures__/**"
+            ],
+            "decision": "deny",
+            "reason": "tdd-refactor may not edit tests"
+          },
+          { "match": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-refactor may only edit non-test source files" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["npm test", "npm run build", "npm run lint"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-refactor may only run npm test / npm run build / npm run lint" }
+      }
+    },
+    "scribe": {
+      "edit": {
+        "rules": [
+          { "match": ["docs/specifications/**", "docs/adr/**"], "decision": "deny", "reason": "scribe may not edit specs or recorded decisions -- a human edits those directly" },
+          { "match": ["**/*.md", "**/*.mdx"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "scribe may only edit markdown files" }
+      }
+    }
+  }
+}

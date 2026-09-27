@@ -1,0 +1,58 @@
+{
+  "$comment": "kw-ad scope rules preset: JVM (Java/Kotlin) with the standard src/main + src/test layout and the Gradle wrapper. For Maven, replace the commands with e.g. \"mvn -q test\" / \"mvn -q verify\"; they are exact-match strings. Build files (build.gradle*, pom.xml) are out of scope for every code stage by default. See templates/README.md.",
+  "version": 1,
+  "unknown_agent_decision": "allow",
+  "agents": {
+    "tdd-red": {
+      "edit": {
+        "rules": [
+          { "match": ["**/src/test/**", "**/src/testFixtures/**"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-red may only edit files under src/test/ or src/testFixtures/" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["./gradlew test"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-red may only run \"./gradlew test\"" }
+      }
+    },
+    "tdd-green": {
+      "edit": {
+        "rules": [
+          { "match": ["**/src/main/**"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-green may only edit files under src/main/" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["./gradlew test", "./gradlew build", "./gradlew check"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-green may only run ./gradlew test / build / check" }
+      }
+    },
+    "tdd-refactor": {
+      "edit": {
+        "rules": [
+          { "match": ["**/src/main/**"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-refactor may only edit files under src/main/" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["./gradlew test", "./gradlew build", "./gradlew check"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-refactor may only run ./gradlew test / build / check" }
+      }
+    },
+    "scribe": {
+      "edit": {
+        "rules": [
+          { "match": ["docs/specifications/**", "docs/adr/**"], "decision": "deny", "reason": "scribe may not edit specs or recorded decisions -- a human edits those directly" },
+          { "match": ["**/*.md"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "scribe may only edit markdown files" }
+      }
+    }
+  }
+}

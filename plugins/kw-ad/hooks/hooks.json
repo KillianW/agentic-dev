@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/check-runtime.sh"]
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${user_config.hook_runtime}",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/agentscope/run/${user_config.hook_runtime}"]
+          }
+        ]
+      }
+    ]
+  }
+}

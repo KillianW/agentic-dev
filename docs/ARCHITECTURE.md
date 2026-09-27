@@ -1,250 +1,226 @@
 # Architecture
 
-This document records the real design decisions behind `agentic-dev`,
-not just what shipped. Read this before changing the hook, adding a
-tracker, or wondering why something is shaped the way it is.
+The design decisions behind `kw-ad`, and the reasons for them. Read
+this before changing the hook, adding a workflow, or wondering why
+something is shaped the way it is.
 
 ## Origin
 
-Everything here is extracted from a working TDD pipeline built and
-dogfooded across real feature-delivery cycles in a private Go
-repository (`KillianW/rkg`). That pipeline proved the *process* —
+The TDD workflow is extracted from a pipeline built and used across
+real feature-delivery cycles in a private Go repository
+(`KillianW/rkg`). That pipeline proved the *process*:
 Red/Green/Refactor with structural per-stage scope enforcement, two
-human sign-off gates, an audit-driven self-review loop — but welded it
-tightly to one repo's specifics: Go/`make` commands hardcoded into a
-Go hook binary's `switch` statements, the repo's own name hardcoded
-into seven agent files and three skill files, and GitHub Issues
-assumed as the only possible tracker throughout. This plugin exists to
-keep the process, generalize the content.
+human sign-off gates, and an audit-driven self-review loop. But it
+was welded to that repo's specifics: Go/`make` commands hardcoded in
+a Go hook binary, the repo's name in every prompt, and GitHub Issues
+as the only tracker. This plugin keeps the process and generalizes
+the content.
 
-## The hook: why Node.js, not Go
+## One plugin, many workflows
 
-The plugin installs into repos of unknown language and toolchain. A
-compiled Go binary means either a multi-arch build+dispatch matrix, or
-requiring Go installed in every installing repo (the origin project
-got this for free only because it happened to be a Go project itself
-— not a property of the *plugin*), or `go run` from source, still
-requiring a Go toolchain nobody but a Go repo has. A POSIX shell script
-avoids compilation but is a poor bet on Windows without WSL/Git Bash.
+The repo is a marketplace (`kw-agentic-dev`) with one plugin,
+`kw-ad`. Each workflow is a skill inside it (`/kw-ad:tdd`, later
+`/kw-ad:<next>`), and agents are prefixed by workflow (`tdd-red`),
+except shared ones (`scribe`).
 
-**Node.js is the one interpreter guaranteed present everywhere Claude
-Code itself runs** — it ships as an npm package and requires Node ≥18
-to run, independent of what language the *installing* repo is written
-in. That converts "compiled-binary-per-arch problem" into an
-already-satisfied precondition.
+One plugin rather than one per workflow, because a plugin can't
+reference files outside its own directory. Separate plugins would
+each need a copy of the hook, config loader, and runtime selection.
+One plugin means one hook, one `scope-rules.json` keyed by agent, one
+runtime choice, and one install.
 
-Consequence: the hook's own scope-rules config is **JSON, not YAML**.
-Node has no built-in YAML parser, and adding an npm dependency would
-reintroduce exactly the "does this installing repo even have `npm
-install` available" problem Node was chosen to avoid. `JSON.parse` is
-dependency-free — the hook needs zero `node_modules`.
+The plugin name has no `.` because MCP tool names only allow
+`[A-Za-z0-9_-]`, and a future workflow might bundle an MCP server
+(`mcp__plugin_kw-ad_<server>__<tool>`).
 
-`hooks/agentscope/config.mjs` and `agentscope.mjs` port
-`tools/agentscopehook/main.go`'s function shape directly, for
-continuity with the origin implementation: `resolveEditDecision`/
-`resolveBashDecision` mirror `decide`/`decideBash`, `matchGlob` is a
-small hand-written, unit-tested glob-to-regex matcher (no npm
-dependency — see the implementation's own comments for why it's a
-single-pass character scan, not a chain of global string replacements:
-the emitted regex snippets contain `*` characters that a second blind
-replace pass would corrupt), and `formatAuditLine` stays pure and
-separate from file I/O for the same testability reason the Go version
-kept it separate.
+## The scope hook
 
-## The two-layer enforcement model
+### Two layers of enforcement
 
-A pipeline agent's scope is enforced at two independent layers:
+1. **Coarse, platform-level**: each agent's frontmatter `tools:` list.
+   `tdd-architect` and `tdd-auditor` have no Edit/Write/Bash at all.
+   `scribe` has no Bash, and `tdd-refactor` has no Write.
+2. **Fine-grained, per path and command**: the `PreToolUse` hook
+   (`plugins/kw-ad/hooks/agentscope/`), driven by the installing
+   repo's `.claude/kw-ad/scope-rules.json`, decides *which* files and
+   commands the granted tools may touch.
 
-1. **Coarse, platform-level**: an agent's frontmatter `tools:` list.
-   `architect` and `process-auditor` simply have no `Edit`/`Write`/
-   `Bash` grant at all — the hook is never even consulted for a tool
-   call that doesn't exist. `doc-scribe` has no `Bash` grant, so its
-   Bash behavior is never a hook concern either.
-2. **Fine-grained, per-path/per-command**: `.claude/agentic-dev/scope-rules.json`,
-   read by the hook at runtime, for whichever tools an agent *was*
-   granted. This is what decides *which* files `implementer-green` can
-   edit, not *whether* it can edit at all.
+Layer 1 depends on frontmatter that parses. **If an agent's YAML
+frontmatter fails to parse, Claude Code silently drops every field,
+`tools:` included, and the agent gets all tools.** This happened to
+two agents in the first port (an unquoted `: ` in a description).
+Descriptions now use `>-` block scalars, and CI runs
+`claude plugin validate`, which catches it.
 
-`templates/scope-rules.json`'s `refactor` entry needs no explicit
-"deny Write" rule, for example — there's nothing to deny, since
-`refactor.md`'s own frontmatter never grants `Write` in the first
-place.
+### Runtime: Node or Python, chosen at install
 
-## The scope-rules config schema
+The hook needs an interpreter. Claude Code's native build bundles its
+own runtime, but hooks can't use it: they run as separate processes,
+and the `claude` binary doesn't act as a script runner. So nothing is
+guaranteed to be present. The original "Node is guaranteed wherever
+Claude Code runs" assumption was wrong.
 
-```json
-{
-  "version": 1,
-  "unknown_agent_decision": "allow",
-  "agents": {
-    "<agent-name>": {
-      "edit": {
-        "rules": [
-          { "match": ["<glob>", "..."], "decision": "allow|deny", "reason": "..." }
-        ],
-        "default": { "decision": "allow|deny", "reason": "..." }
-      },
-      "bash": {
-        "rules": [
-          { "match_exact": ["<exact command string>", "..."], "decision": "allow|deny", "reason": "..." }
-        ],
-        "default": { "decision": "allow|deny", "reason": "..." }
-      }
-    }
-  }
-}
-```
+The hook ships as **two implementations of one spec**: Node 18+
+(`js/`) and Python 3.8+ (`py/kwad_scope/`), both standard-library only
+(no `npm install`, no `pip install`). The plugin's required
+`hook_runtime` option (`node` | `python3` | `python`) selects one.
+`hooks.json` runs `<hook_runtime> <plugin>/hooks/agentscope/run/<hook_runtime>`
+using exec-form `${user_config.hook_runtime}` substitution. Each
+file in `run/` is a tiny launcher named after its interpreter
+command. `python` exists alongside `python3` because `python3` is
+often a stub on Windows (the Store alias) and macOS (without the
+Command Line Tools).
 
-- **Rules evaluate top-to-bottom, first match wins** — this is what
-  lets a narrow `deny` (e.g. "deny `*_test.go`") precede a broad
-  `allow` (e.g. "allow `*.go`") for the same agent.
-- **`match` is glob**: `*` matches within one path segment, `**`
-  matches zero or more whole segments (crosses `/`). A plain string
-  with no `*` is an exact relative-path match.
-- **`match_exact` for Bash is deliberately exact-string-only** — never
-  a glob, never a prefix match. This is a security property carried
-  forward verbatim from the origin project: a command like `make test;
-  rm -rf /` or `make test extra` simply isn't equal to any allowed
-  string, so it's denied by construction rather than by trying to
-  parse or sanitize an arbitrary shell string.
-- **`unknown_agent_decision`** governs any agent type the config
-  doesn't mention at all — including the main/orchestrating session,
-  which never carries an `agent_type`. Default `"allow"`: this hook is
-  an opt-in allow-list over specific pipeline agent names, not a
-  default-deny sandbox over every possible caller.
+Keeping two implementations in step is the cost. The mitigation is
+`tests/hook-cases/`: language-neutral JSON cases that both suites run
+end to end against their own launcher. Behavior changes start there.
 
-### `"ask"` is not a legal `decision` value, anywhere
+The config stays JSON because neither standard library parses YAML.
 
-This is deliberate, not an oversight. A live test in the origin
-project found that `permissionDecision: "ask"` **does not actually
-pause for a spawned subagent** — it resolves itself unattended after
-roughly two minutes under `acceptEdits` permission mode, with nothing
-shown to the parent session. There is currently no real mechanism for
-human sign-off on a subagent-originated `"ask"`. Until that changes,
-offering `"ask"` as a schema option would let a future config author
-reach for something that silently doesn't behave the way its name
-implies. `templates/scope-rules.json`'s `doc-scribe` entry uses a hard
-`deny` for frozen-decision-tier paths for exactly this reason — a
-human can still make that edit directly themselves.
+### A broken runtime can't block, so it's made visible instead
 
-### No bundled Go/Make default
+Claude Code treats a hook that fails to start (runtime missing, wrong
+version) as a **non-blocking error, and the tool call proceeds**. Only
+exit code 2 or a JSON `deny` blocks. So a misconfigured runtime means
+silently no enforcement, and no hook-internal logic can prevent that.
+Two things cover it:
 
-The hook **never** falls back to a language-specific ruleset when an
-installing repo hasn't configured its own `scope-rules.json`. `**/*.go`,
-`Makefile`, `make build`/`make test` are meaningless — or actively
-wrong — for a Python, TypeScript, or Rust repo. There is no safe
-universal default for `test-writer-red`/`implementer-green`/
-`refactor`'s file-scope and Bash-command rules, because those are
-inherently language/build-tool specific; no repo-agnostic guess is
-honest. When nothing resolves, `hooks/agentscope/config.mjs`'s
-`loadConfig` returns an **empty ruleset** with `unknown_agent_decision:
-"allow"`, plus a loud stderr warning and a matching audit-log entry —
-this degrades to exactly the origin project's own pre-hook baseline
-(prompt-level restrictions only, no structural guarantee), never a
-hard failure and never a wrongly-shaped guess standing in for real
-configuration.
+- `hooks/check-runtime.sh`, a POSIX-sh `SessionStart` hook, runs the
+  launcher's `--self-test`. On failure it emits a `systemMessage`
+  shown to the user, plus context telling Claude.
+- `/kw-ad:doctor`'s live probe has each scope-managed agent attempt
+  an out-of-scope write and checks that a `deny` lands in the audit
+  log. That is the only end-to-end proof.
 
-`templates/scope-rules.json` ships a real, working example — the
-origin project's own Go/Make-shaped ruleset, generalized into this
-schema — purely as a copy-and-adapt starting point.
+### Decision semantics
 
-### Config resolution order
+For each Edit/Write/MultiEdit/NotebookEdit/Bash/PowerShell call:
 
-1. `$AGENTIC_DEV_SCOPE_CONFIG` env var, if set (explicit override).
-2. `<cwd>/.claude/agentic-dev/scope-rules.json`, if present.
-3. Empty ruleset + warning (see above).
+1. **The main session is never managed.** No `agent_type` means the
+   hook prints nothing and exits 0, so Claude Code's normal permission
+   flow applies. The first port returned `"allow"` here, which
+   auto-approved every main-session command.
+2. **Agent identity**: plugin subagents report `agent_type` as
+   `kw-ad:tdd-red`. The hook strips only its own `kw-ad:` prefix and
+   looks up the bare name, so vendored installs with bare names work
+   too. The first port compared the namespaced value against bare
+   config keys, so nothing ever matched.
+3. **Scope-managed agents** are the four in `RESTRICTED_AGENTS`
+   (`tdd-red`, `tdd-green`, `tdd-refactor`, `scribe`) plus any other
+   agent the config lists. For them, the hook **fails closed**. A
+   missing or invalid config, a missing agent entry, a missing
+   `edit`/`bash` section, a path outside the project, or no matching
+   rule without a `default` all produce a `deny` with a reason that
+   tells the agent (and the human reading the transcript) what to fix.
+   Unparseable hook input exits 2. An internal error exits 2 for
+   subagents and 0 for the main session.
+4. **Other subagents** (Explore, general-purpose, other plugins'
+   agents): silent, unless the config sets
+   `"unknown_agent_decision": "deny"`.
+5. **Matching**: rules are checked top to bottom and the first match
+   wins. Edit globs match the project-relative, `/`-separated path.
+   Bash rules are exact string equality after trimming, which is a
+   deliberate security property: `make test; rm -rf /` simply isn't
+   equal to `make test`.
+6. Every decision about a managed agent is appended to
+   `.claude/kw-ad/audit.log` (one JSON line) for `tdd-auditor`.
 
-A present-but-unparseable config also falls back to the empty ruleset
-with a warning — a broken config must never brick every Edit/Write/
-Bash call in the installing repo, but a real authoring error should
-say so loudly, distinctly from "not configured yet."
+The project root is `$CLAUDE_PROJECT_DIR`, falling back to the
+payload's `cwd`. `$KW_AD_SCOPE_CONFIG` overrides the config path.
 
-### Open verification items (not yet confirmed against current Claude Code docs at implementation time)
+The schema and glob syntax are documented in
+[`plugins/kw-ad/templates/README.md`](../plugins/kw-ad/templates/README.md).
+Each launcher's `--check-config <file>` validates a config.
 
-- Whether `plugin.json`'s `"hooks": "./hooks/hooks.json"` key is
-  required, or whether `hooks/hooks.json` auto-loads by convention if
-  present.
-- Whether `${CLAUDE_PLUGIN_ROOT}` is available as an actual environment
-  variable inside the spawned hook process itself (needed if a future
-  fallback path wants to reference the plugin's own bundled files), or
-  only usable for `${...}` string substitution inside `hooks.json`'s
-  own `command`/`args` fields.
+### `"ask"` is not a legal decision
 
-## Two hard-won platform facts, carried forward
+A live test in the origin repo found that `permissionDecision: "ask"`
+**does not pause a spawned subagent**. It resolves unattended after
+about two minutes under `acceptEdits`, with nothing shown to the
+parent session. Offering it would invite a config author to rely on a
+human checkpoint that doesn't exist. Frozen-decision docs use a hard
+`deny` for `scribe`, and a human edits them directly.
 
-Both discovered building the origin project's hook, both load-bearing
-for anyone extending this one:
+## Trackers: the main session is the broker
 
-1. **An agent name can be silently reserved by Claude Code itself.**
-   The name `scribe` was found to **silently defeat `PreToolUse` hook
-   dispatch entirely — no error, zero enforcement** — when used as an
-   agent name. This is why the documentation agent here is
-   `doc-scribe`, not `scribe`. If you ever rename or add a pipeline
-   agent, **verify a denial actually fires** for an intentionally-wrong
-   test edit under the new name before trusting it — there is no error
-   message that will tell you otherwise.
-2. **`"ask"` doesn't block a spawned subagent** — covered above, and
-   why the schema doesn't offer it as an option at all.
+Subagent tool grants are literal tool names in frontmatter, and
+plugin-bundled MCP servers get namespaced tool names
+(`mcp__plugin_kw-ad_github__*`). The first port's `mcp__github__*`
+grants therefore never matched. Worse, any grant bakes one tracker
+into the agents.
 
-## Tracker abstraction
+So **no pipeline agent has a tracker tool**. The orchestrating skill,
+running in the main session with whatever the user has configured
+(an Atlassian or Azure DevOps MCP server, `gh`, `az`, `glab`), fetches
+work-item and PR content and pastes it into each subagent's prompt.
+`.claude/kw-ad/tracker.yaml` tells the main session how:
 
-No Claude Code platform mechanism exists for "pluggable work-item
-tracker" — this is a project-local binding file
-(`.claude/agentic-dev/tracker.yaml`, shipped as
-`templates/tracker.yaml`) plus a prose convention every ported agent
-follows: refer to "your configured tracker's `<operation>`" rather
-than naming an MCP tool directly in prose.
+- `tracker.mode`: `none` | `github` | `jira` | `azure-devops` |
+  `custom`, plus free-text `instructions`.
+- `code_host.mode`: `manual` | `github` | `azure-devops` | `gitlab` |
+  `custom`, plus `instructions`.
 
-**Real, stated limitation**: subagent tool access is still granted by
-literal tool name in an agent's YAML frontmatter — a Claude Code
-platform constraint this abstraction cannot route around. Adding a
-second tracker means a mechanical frontmatter edit per agent
-(unavoidable) plus a new `tracker.yaml` binding — but **not**
-rewriting each agent's operational prose, which never hardcodes an MCP
-tool name outside its own frontmatter `tools:` list. GitHub Issues
-(via the `github` MCP server, see `.mcp.json`) is the only *working*
-binding today; the abstraction's value is bounded to "addable later
-without a full prose rewrite," not "usable with a second tracker
-today."
+`none` + `manual` always works.
 
-`userConfig.tracker_id` (a plain string, default `"github-issues"`) is
-a readability complement only, substituted into agent prose — the real
-operation mapping lives in `tracker.yaml` since `userConfig` fields
-can't express nested maps.
-
-## Issue-numbering convention (github-issue-manager)
-
-The origin project's `EPIC-N:`/`FEATURE-N.M:`/`TASK-N.M.P:`/
-`DESIGN-N.M:`/`BUG-N.M:` title-prefix scheme is that repo's own
-convention, not universal. `github-issue-manager.md` treats it as
-**optional config**: if `.claude/agentic-dev/issue-conventions.yaml`
-exists and `enabled: true`, follow its declared scheme (see
-`templates/issue-conventions.yaml`, which mirrors the origin project's
-own scheme as a real working example); if the file is absent, fall
-back to plain issue titles with no enforced prefix or numbering at
-all. This keeps the file genuinely portable rather than silently
-rkg-shaped underneath a thin rename.
+kw-ad bundles no MCP servers. `github-issue-manager` is an optional,
+GitHub-only agent outside the pipeline, and it works only if the user
+has a `github` MCP server of their own.
 
 ## Parameterization
 
 | What | Where | Why |
 |---|---|---|
-| `repo_owner`, `repo_name`, `default_branch` | `plugin.json` `userConfig` | Scalar, install-time, substituted into prose as `${user_config.repo_owner}/${user_config.repo_name}` |
-| `tracker_id` | `userConfig` (default `"github-issues"`) | Scalar label; real mapping lives in `tracker.yaml` |
-| Hook scope rules | `.claude/agentic-dev/scope-rules.json` (installing repo) | Structured, nested, hand-edited post-install, machine-parsed at runtime — not a `userConfig` scalar's job |
-| Tracker operation bindings | `.claude/agentic-dev/tracker.yaml` (installing repo) | Same reasoning |
-| Optional issue-numbering convention | `.claude/agentic-dev/issue-conventions.yaml` (installing repo) | Same reasoning; absent by default |
-| Optional performance-regression policy | `.claude/agentic-dev/perf-policy.yaml` (installing repo) | Same reasoning; absent by default |
-| Commit-scope list, or any other repo-specific file `templates/` only proposes | Left as installing-repo content | A plugin has no install hook that writes files into the target repo's tree — see `docs/ROADMAP.md` Phase 3 |
+| `hook_runtime` (required), `repo_owner`, `repo_name`, `default_branch` | `plugin.json` `userConfig` | Scalar, install-time. `${user_config.*}` is substituted into agent/skill prose and hook `command`/`args` |
+| Scope rules | `.claude/kw-ad/scope-rules.json` | Structured, per-repo, machine-read by the hook |
+| Tracker / code host | `.claude/kw-ad/tracker.yaml` | Per-repo guidance for the main session |
+| Perf-regression gates (optional) | `.claude/kw-ad/perf-policy.yaml` | Per-repo, read by `tdd-refactor` |
+| Issue numbering (optional) | `.claude/kw-ad/issue-conventions.yaml` | Per-repo, read by `github-issue-manager` |
 
-## Why the plugin ships no install-time file-writing mechanism
+A plugin can't write files into the repo that installs it, so
+`/kw-ad:init` (a main-session skill) scaffolds `.claude/kw-ad/` from
+`templates/`.
 
-Claude Code plugins don't get a hook into "files get copied into the
-installing repo at enable time" — a plugin can bundle files, declare
-agents/skills/hooks, and read `userConfig`, but it can't reach out and
-write `.claude/agentic-dev/scope-rules.json` into the host repo purely
-by being installed. `templates/` plus `templates/README.md`'s manual
-copy-and-edit instructions are the honest current answer; a future
-`/agentic-dev:init` skill (a skill runs in the main session with real
-tool access, unlike a subagent) is the natural way to automate this —
-deferred, see `docs/ROADMAP.md` Phase 3, not built in this first pass.
+## Distribution without a git URL
+
+Everything installs from a local copy: `claude --plugin-dir
+<copy>/plugins/kw-ad` for one session, or `claude plugin marketplace
+add <copy>` for a persistent install. Where managed settings block
+local plugins, `scripts/vendor.sh` exports the plugin as plain
+project config under `<repo>/.claude/`. It resolves plugin-only
+syntax at export time (userConfig values, `${CLAUDE_PLUGIN_ROOT}`,
+`kw-ad:` prefixes) and merges the hook entries into
+`.claude/settings.json`, using `$CLAUDE_PROJECT_DIR` paths.
+
+## Platform facts this design depends on
+
+Observed live with Claude Code 2.1.263 (headless `claude -p` runs in
+scratch repos, Windows + Git Bash):
+
+- **Plugin install** (`--plugin-dir`, runtime `python`): `agent_type`
+  arrives as `kw-ad:tdd-red`, and exec-form `${user_config.hook_runtime}`
+  substitution works. Out-of-scope writes are denied, and the reason
+  reaches the agent.
+- **Vendored install**: `agent_type` arrives bare (`tdd-red`). Allow and
+  deny both work, and audit targets are project-relative.
+- **`hook_runtime` unset**: `SessionStart` shows the kw-ad warning.
+  PreToolUse logs `Hook failed to run` and **the write goes through**
+  (fail open, as documented).
+- **`--plugin-dir` config**: `pluginConfigs["kw-ad@inline"].options.hook_runtime`
+  in a `--settings` file configures a `--plugin-dir` copy.
+
+From the Claude Code docs at v2.1.263. Re-check these when upgrading:
+
+- `hooks/hooks.json` is auto-loaded. A `"hooks"` key in `plugin.json`
+  is **merged** with it, so declaring both registers hooks twice.
+- Exec-form hooks (`command` + `args`) spawn without a shell and
+  substitute `${user_config.*}`. Shell-form hooks reject
+  `${user_config.*}`. Hook processes get `CLAUDE_PLUGIN_ROOT`,
+  `CLAUDE_PROJECT_DIR`, and `CLAUDE_PLUGIN_OPTION_<KEY>`.
+- Plugin subagents ignore the `hooks`, `mcpServers`, and
+  `permissionMode` frontmatter fields, which is why enforcement is one
+  plugin-level hook dispatching on `agent_type`, not per-agent hooks.
+- `userConfig` `options` (fixed choice lists) need v2.1.271+, so
+  `hook_runtime` is a free string validated by `check-runtime.sh`.
+- Hook exit codes: 2 blocks, and other non-zero codes are non-blocking
+  errors (fail open). JSON `permissionDecision: "deny"` blocks with a
+  reason shown to the model.

@@ -1,0 +1,3 @@
+# Force LF everywhere: the hook launchers and shell scripts must run under
+# sh/node/python on every OS, and a CRLF checkout breaks sh scripts.
+* text=auto eol=lf

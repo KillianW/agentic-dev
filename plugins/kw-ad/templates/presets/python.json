@@ -1,0 +1,60 @@
+{
+  "$comment": "kw-ad scope rules preset: Python with pytest (tests under tests/ or named test_*.py / *_test.py). Replace the commands with this repo's real ones (e.g. \"uv run pytest\", \"poetry run pytest\"); they are exact-match strings. See templates/README.md.",
+  "version": 1,
+  "unknown_agent_decision": "allow",
+  "agents": {
+    "tdd-red": {
+      "edit": {
+        "rules": [
+          { "match": ["tests/**", "**/test_*.py", "**/*_test.py", "**/conftest.py"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-red may only edit test files (tests/**, test_*.py, *_test.py, conftest.py)" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["pytest"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-red may only run \"pytest\"" }
+      }
+    },
+    "tdd-green": {
+      "edit": {
+        "rules": [
+          { "match": ["tests/**", "**/test_*.py", "**/*_test.py", "**/conftest.py"], "decision": "deny", "reason": "tdd-green may not edit tests" },
+          { "match": ["**/*.py"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-green may only edit non-test .py files" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["pytest", "ruff check .", "ruff format --check ."], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-green may only run pytest / ruff check . / ruff format --check ." }
+      }
+    },
+    "tdd-refactor": {
+      "edit": {
+        "rules": [
+          { "match": ["tests/**", "**/test_*.py", "**/*_test.py", "**/conftest.py"], "decision": "deny", "reason": "tdd-refactor may not edit tests" },
+          { "match": ["**/*.py"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-refactor may only edit non-test .py files" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["pytest", "ruff check .", "ruff format --check ."], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-refactor may only run pytest / ruff check . / ruff format --check ." }
+      }
+    },
+    "scribe": {
+      "edit": {
+        "rules": [
+          { "match": ["docs/specifications/**", "docs/adr/**"], "decision": "deny", "reason": "scribe may not edit specs or recorded decisions -- a human edits those directly" },
+          { "match": ["**/*.md"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "scribe may only edit markdown files" }
+      }
+    }
+  }
+}

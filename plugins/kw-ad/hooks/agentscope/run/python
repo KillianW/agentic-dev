@@ -1,0 +1,16 @@
+# kw-ad scope hook launcher for Python. hooks.json runs
+# `<hook_runtime> <this dir>/<hook_runtime>`, so this file is named after the
+# interpreter command; ./python is an identical copy.
+import os
+import sys
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "py"))
+
+try:
+    from kwad_scope.main import main
+except Exception as err:  # noqa: BLE001 -- e.g. an interpreter too old to import it
+    sys.stderr.write("kw-ad: scope hook failed to start: %s\n" % err)
+    sys.exit(2)
+
+sys.exit(main(sys.argv[1:]))

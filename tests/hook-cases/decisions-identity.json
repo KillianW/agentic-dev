@@ -1,0 +1,103 @@
+{
+  "config": {
+    "version": 1,
+    "unknown_agent_decision": "allow",
+    "agents": {
+      "tdd-red": {
+        "edit": { "rules": [{ "match": ["tests/**"], "decision": "allow" }], "default": { "decision": "deny", "reason": "red: tests only" } },
+        "bash": { "rules": [{ "match_exact": ["npm test"], "decision": "allow" }], "default": { "decision": "deny" } }
+      },
+      "tdd-green": {
+        "edit": { "rules": [{ "match": ["src/**"], "decision": "allow" }], "default": { "decision": "deny" } },
+        "bash": { "rules": [{ "match_exact": ["npm test"], "decision": "allow" }], "default": { "decision": "deny" } }
+      },
+      "tdd-refactor": {
+        "edit": { "rules": [{ "match": ["src/**"], "decision": "allow" }], "default": { "decision": "deny" } },
+        "bash": { "rules": [{ "match_exact": ["npm test"], "decision": "allow" }], "default": { "decision": "deny" } }
+      },
+      "scribe": {
+        "edit": { "rules": [{ "match": ["**/*.md"], "decision": "allow" }], "default": { "decision": "deny" } }
+      },
+      "my-reviewer": {
+        "edit": { "default": { "decision": "deny", "reason": "my-reviewer is read-only" } }
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "plugin-namespaced agent type is matched by its bare config key",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "red: tests only" }
+    },
+    {
+      "name": "bare agent type (vendored install) is matched too",
+      "payload": { "agent_type": "tdd-red", "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "red: tests only" }
+    },
+    {
+      "name": "main session edits produce no decision (normal permission flow)",
+      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": null }
+    },
+    {
+      "name": "main session Bash produces no decision (never auto-approved)",
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "rm -rf build" } },
+      "expect": { "exit": 0, "decision": null }
+    },
+    {
+      "name": "an empty agent_type string is the main session",
+      "payload": { "agent_type": "", "tool_name": "Write", "tool_input": { "file_path": "{project}/x" } },
+      "expect": { "exit": 0, "decision": null }
+    },
+    {
+      "name": "another plugin's same-named agent is not ours",
+      "payload": { "agent_type": "other-plugin:tdd-red", "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": null }
+    },
+    {
+      "name": "a built-in agent not in config gets no decision under unknown_agent_decision allow",
+      "payload": { "agent_type": "general-purpose", "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": null }
+    },
+    {
+      "name": "unknown_agent_decision deny blocks unlisted subagents",
+      "config": {
+        "version": 1,
+        "unknown_agent_decision": "deny",
+        "agents": {
+          "tdd-red": { "edit": { "default": { "decision": "deny" } } },
+          "tdd-green": { "edit": { "default": { "decision": "deny" } } },
+          "tdd-refactor": { "edit": { "default": { "decision": "deny" } } },
+          "scribe": { "edit": { "default": { "decision": "deny" } } }
+        }
+      },
+      "payload": { "agent_type": "general-purpose", "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "unknown_agent_decision is \"deny\"" }
+    },
+    {
+      "name": "unknown_agent_decision never applies to the main session",
+      "config": {
+        "version": 1,
+        "unknown_agent_decision": "deny",
+        "agents": {}
+      },
+      "payload": { "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": null }
+    },
+    {
+      "name": "a custom agent listed in config is enforced",
+      "payload": { "agent_type": "my-reviewer", "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "my-reviewer is read-only" }
+    },
+    {
+      "name": "tools outside the matcher set are ignored even for restricted agents",
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Read", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": null }
+    },
+    {
+      "name": "allowed calls are audited with the raw agent type",
+      "payload": { "agent_type": "kw-ad:tdd-green", "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/app.ts" } },
+      "expect": { "exit": 0, "decision": "allow", "audit": true }
+    }
+  ]
+}

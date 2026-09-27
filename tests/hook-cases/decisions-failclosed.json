@@ -1,0 +1,108 @@
+{
+  "config": {
+    "version": 1,
+    "agents": {
+      "tdd-red": {
+        "edit": { "rules": [{ "match": ["tests/**"], "decision": "allow" }], "default": { "decision": "deny" } }
+      },
+      "tdd-refactor": {
+        "edit": { "rules": [{ "match": ["src/**"], "decision": "allow" }] }
+      },
+      "scribe": {
+        "edit": { "rules": [{ "match": ["**/*.md"], "decision": "allow" }], "default": { "decision": "deny" } }
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "missing config denies restricted agents",
+      "config": null,
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Edit", "tool_input": { "file_path": "{project}/tests/a_test.py" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "could not be loaded" }
+    },
+    {
+      "name": "missing config still leaves the main session alone",
+      "config": null,
+      "payload": { "tool_name": "Bash", "tool_input": { "command": "ls" } },
+      "expect": { "exit": 0, "decision": null }
+    },
+    {
+      "name": "missing config leaves other subagents alone",
+      "config": null,
+      "payload": { "agent_type": "Explore", "tool_name": "Bash", "tool_input": { "command": "ls" } },
+      "expect": { "exit": 0, "decision": null }
+    },
+    {
+      "name": "invalid JSON denies restricted agents",
+      "config": { "$raw": "{ not valid json" },
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "Edit", "tool_input": { "file_path": "{project}/README.md" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "invalid JSON" }
+    },
+    {
+      "name": "a UTF-8 BOM in the config is tolerated",
+      "config": { "$raw": "﻿{\"version\":1,\"agents\":{\"scribe\":{\"edit\":{\"rules\":[{\"match\":[\"**/*.md\"],\"decision\":\"allow\"}]}}}}" },
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "Edit", "tool_input": { "file_path": "{project}/README.md" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "\"ask\" is not a legal decision; the whole config is rejected",
+      "config": {
+        "version": 1,
+        "agents": { "scribe": { "edit": { "rules": [{ "match": ["**/*.md"], "decision": "ask" }] } } }
+      },
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "Edit", "tool_input": { "file_path": "{project}/README.md" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "must be \"allow\" or \"deny\"" }
+    },
+    {
+      "name": "a wrong version is rejected",
+      "config": { "version": 2, "agents": {} },
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "Edit", "tool_input": { "file_path": "{project}/README.md" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "version must be 1" }
+    },
+    {
+      "name": "a plugin-prefixed config key is rejected",
+      "config": { "version": 1, "agents": { "kw-ad:scribe": { "edit": { "default": { "decision": "allow" } } } } },
+      "payload": { "agent_type": "kw-ad:scribe", "tool_name": "Edit", "tool_input": { "file_path": "{project}/README.md" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "bare agent name" }
+    },
+    {
+      "name": "a restricted agent missing from an otherwise valid config is denied",
+      "payload": { "agent_type": "kw-ad:tdd-green", "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/a.py" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "no entry in scope-rules.json" }
+    },
+    {
+      "name": "no matching rule and no default denies",
+      "payload": { "agent_type": "kw-ad:tdd-refactor", "tool_name": "Edit", "tool_input": { "file_path": "{project}/README.md" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "no default is configured" }
+    },
+    {
+      "name": "a matching rule still applies when there is no default",
+      "payload": { "agent_type": "kw-ad:tdd-refactor", "tool_name": "Edit", "tool_input": { "file_path": "{project}/src/a.py" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "KW_AD_SCOPE_CONFIG overrides the project config (here: pointing at a missing file)",
+      "env": { "KW_AD_SCOPE_CONFIG": "{project}/does-not-exist.json" },
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Edit", "tool_input": { "file_path": "{project}/tests/a_test.py" } },
+      "expect": { "exit": 0, "decision": "deny", "reason_includes": "does-not-exist.json" }
+    },
+    {
+      "name": "without CLAUDE_PROJECT_DIR the payload cwd is the project root",
+      "env": { "CLAUDE_PROJECT_DIR": null },
+      "payload": { "agent_type": "kw-ad:tdd-red", "tool_name": "Edit", "cwd": "{project}", "tool_input": { "file_path": "{project}/tests/a_test.py" } },
+      "expect": { "exit": 0, "decision": "allow" }
+    },
+    {
+      "name": "unparseable stdin blocks with exit 2",
+      "stdin_raw": "this is not json",
+      "payload": {},
+      "expect": { "exit": 2, "decision": null, "audit": false }
+    },
+    {
+      "name": "a non-object payload blocks with exit 2",
+      "stdin_raw": "[1, 2, 3]",
+      "payload": {},
+      "expect": { "exit": 2, "decision": null, "audit": false }
+    }
+  ]
+}

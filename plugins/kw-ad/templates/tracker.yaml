@@ -1,0 +1,44 @@
+# kw-ad tracker and code-host binding. /kw-ad:init copies this to
+# <repo>/.claude/kw-ad/tracker.yaml.
+#
+# Read only by the MAIN session (the /kw-ad:tdd, /kw-ad:new-branch and
+# /kw-ad:ship skills), never by pipeline subagents. The main session uses
+# whatever tools you already have (an Atlassian or Azure DevOps MCP server,
+# `gh`, `az`, `glab`, ...) to fetch work-item and PR content, and pastes that
+# content into each subagent's prompt. That's why kw-ad bundles no MCP
+# servers and no pipeline agent is granted a tracker tool.
+version: 1
+
+# Where work items live.
+tracker:
+  # none         -- no tracker. Work comes from a plain description (paste a
+  #                 ticket's text in if you like); nothing is updated.
+  # github       -- GitHub Issues, via `gh` or a GitHub MCP server.
+  # jira         -- Jira, via an Atlassian MCP server or CLI you have set up.
+  # azure-devops -- Azure Boards, via an Azure DevOps MCP server or `az boards`.
+  # custom       -- anything else; describe it in `instructions`.
+  mode: none
+
+  # Free text for the main session: which tool or command to use to read and
+  # update a work item, and any conventions (key format, fields that hold
+  # acceptance criteria, which transition means "done"). Leave empty for
+  # mode: none. Examples:
+  #   "Read issues with the Atlassian MCP tool getJiraIssue (keys look like
+  #    PAY-123). Acceptance criteria are in the description under 'AC'.
+  #    Do not transition issues; just add a comment with the PR link."
+  #   "Use `az boards work-item show --id <id>`."
+  instructions: ""
+
+# Where branches are pushed and PRs are reviewed/merged.
+code_host:
+  # manual       -- /kw-ad:ship pushes the branch, then asks you to open,
+  #                 review, and merge the PR yourself and confirm when done.
+  # github       -- `gh pr create/checks/merge` (or a GitHub MCP server).
+  # azure-devops -- `az repos pr create/show/update`.
+  # gitlab       -- `glab mr create/view/merge`.
+  # custom       -- describe it in `instructions`.
+  mode: manual
+
+  # Free text for the main session: merge method (squash?), required
+  # reviewers, PR template location, how to check CI. Leave empty for manual.
+  instructions: ""

@@ -1,0 +1,32 @@
+{
+  "name": "kw-ad",
+  "version": "0.2.0",
+  "description": "Agentic development workflows with hook-enforced per-agent scope. First workflow: a TDD feature-delivery pipeline (/kw-ad:tdd) -- plan, red, green, refactor, document, ship, audit.",
+  "author": {
+    "name": "Killian Walsh"
+  },
+  "userConfig": {
+    "hook_runtime": {
+      "type": "string",
+      "title": "Hook runtime",
+      "description": "Interpreter command for the scope-enforcement hook: \"node\" (Node.js 18+), \"python3\", or \"python\" (Python 3.8+). Must be on PATH. Use \"python\" where \"python3\" is missing or a stub (e.g. Windows). Checked at session start; run /kw-ad:doctor to verify.",
+      "required": true
+    },
+    "repo_owner": {
+      "type": "string",
+      "title": "Repository owner",
+      "description": "The org/user that owns the repository this plugin is used in (e.g. \"KillianW\"). Substituted into agent/skill prose."
+    },
+    "repo_name": {
+      "type": "string",
+      "title": "Repository name",
+      "description": "The repository's name (e.g. \"rkg\"). Substituted into agent/skill prose."
+    },
+    "default_branch": {
+      "type": "string",
+      "title": "Default branch",
+      "description": "The branch new work branches from and ships back to.",
+      "default": "main"
+    }
+  }
+}

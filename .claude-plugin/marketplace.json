@@ -1,13 +1,14 @@
 {
-  "name": "agentic-dev-marketplace",
+  "name": "kw-agentic-dev",
+  "description": "Killian Walsh's agentic development workflows for Claude Code.",
   "owner": {
     "name": "Killian Walsh"
   },
   "plugins": [
     {
-      "name": "agentic-dev",
-      "source": "./",
-      "description": "A generalized, hook-enforced six-agent TDD feature-delivery pipeline."
+      "name": "kw-ad",
+      "source": "./plugins/kw-ad",
+      "description": "Agentic development workflows with hook-enforced per-agent scope. First workflow: a TDD feature-delivery pipeline (/kw-ad:tdd)."
     }
   ]
 }

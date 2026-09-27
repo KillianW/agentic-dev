@@ -1,0 +1,19 @@
+{
+  "cases": [
+    { "style": "posix", "root": "/repo", "path": "/repo/src/a.go", "expected": "src/a.go" },
+    { "style": "posix", "root": "/repo", "path": "src/a.go", "expected": "src/a.go" },
+    { "style": "posix", "root": "/repo", "path": "./src/a.go", "expected": "src/a.go" },
+    { "style": "posix", "root": "/repo", "path": "/repo/src/../tests/a_test.go", "expected": "tests/a_test.go" },
+    { "style": "posix", "root": "/repo", "path": "/repo", "expected": null },
+    { "style": "posix", "root": "/repo", "path": "/other/a.go", "expected": null },
+    { "style": "posix", "root": "/repo", "path": "../a.go", "expected": null },
+    { "style": "posix", "root": "/repo", "path": "/repo/../repo2/a.go", "expected": null },
+    { "style": "posix", "root": "/repo", "path": "/repo/..hidden/a.go", "expected": "..hidden/a.go" },
+    { "style": "win32", "root": "C:\\repo", "path": "C:\\repo\\src\\a.go", "expected": "src/a.go" },
+    { "style": "win32", "root": "C:\\repo", "path": "C:/repo/src/a.go", "expected": "src/a.go" },
+    { "style": "win32", "root": "C:\\repo", "path": "src\\a.go", "expected": "src/a.go" },
+    { "style": "win32", "root": "C:\\repo", "path": "D:\\repo\\src\\a.go", "expected": null },
+    { "style": "win32", "root": "C:\\repo", "path": "C:\\other\\a.go", "expected": null },
+    { "style": "win32", "root": "C:\\repo", "path": "C:\\repo\\..\\a.go", "expected": null }
+  ]
+}

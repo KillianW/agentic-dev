@@ -1,66 +1,95 @@
 # agentic-dev
 
-A Claude Code plugin: a six-agent TDD feature-delivery pipeline with
-structural, hook-enforced per-stage scope — extracted and generalized
-from a working system built and dogfooded end-to-end in a private Go
-project (`KillianW/rkg`).
+A Claude Code plugin marketplace for agentic development workflows. The
+one plugin, **`kw-ad`**, holds every workflow as a skill, and every
+workflow shares one scope-enforcement hook that limits what each
+subagent may edit or run.
 
-**This is a complete first-draft port, not a proven one.** Every
-agent, skill, and the hook itself are real, working files — not stubs
-— but nothing here has been dogfood-tested against a second repository
-yet, and the hook's own test suite has never been executed (the
-environment that wrote it had no Node.js installed). See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for the hardening plan and
-[`docs/PORTING-NOTES.md`](docs/PORTING-NOTES.md) for exactly what's
-known-rough about each file before you rely on this for real work.
+| Workflow | Skill | Status |
+|---|---|---|
+| TDD feature delivery | `/kw-ad:tdd` | First external trial pending. The hook is unit-tested; the agents and skills haven't been run end to end outside the repo they came from. See [docs/workflows/tdd.md](docs/workflows/tdd.md). |
 
-## The pipeline
+Supporting skills: `/kw-ad:init` (set up a repo), `/kw-ad:doctor`
+(prove enforcement works), `/kw-ad:new-branch`, `/kw-ad:ship`.
+
+## How enforcement works
+
+Some pipeline agents (`tdd-red`, `tdd-green`, `tdd-refactor`,
+`scribe`) have their Edit/Write/Bash calls checked by a `PreToolUse`
+hook against the repo's `.claude/kw-ad/scope-rules.json`. For example,
+Red may only touch test files and run the one test command, while
+Green may not touch tests at all. The hook fails closed: a missing
+config, broken config, or crashed hook denies those agents rather
+than letting them through. Other agents, and your own session, are
+never affected.
+
+The hook ships in **Node.js (18+)** and **Python (3.8+)**, standard
+library only. You choose the runtime when you enable the plugin
+(`hook_runtime`: `node`, `python3`, or `python`). Claude Code's own
+bundled runtime isn't available to hooks, so one of these must be on
+PATH. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Install
+
+You need a local copy of this repo (clone it or unzip an archive).
+Nothing below fetches from GitHub.
+
+**Try it for one session:**
+
+```sh
+claude --plugin-dir /path/to/agentic-dev/plugins/kw-ad
+```
+
+**Install it (persists across sessions):**
+
+```sh
+claude plugin marketplace add /path/to/agentic-dev
+claude plugin install kw-ad@kw-agentic-dev
+```
+
+Claude Code asks for the plugin's options on enable. `hook_runtime` is
+required.
+
+**If your organization blocks local plugins**, vendor it into the
+target repo as plain project config instead:
+
+```sh
+sh /path/to/agentic-dev/scripts/vendor.sh /path/to/target-repo --runtime python3
+```
+
+Vendored skills are named `/kw-ad-tdd`, `/kw-ad-init`, and so on.
+
+Then, in the target repo: `/kw-ad:init` → `/kw-ad:doctor` →
+`/kw-ad:tdd <work item or description>`. The full checklist for a
+first trial is in [docs/TRYING-IT.md](docs/TRYING-IT.md).
+
+## Repository layout
 
 ```
-architect (plan)
-   -> human sign-off
--> new-branch
--> doc-scribe (record the plan)
--> test-writer-red   (write failing tests)
--> implementer-green (make them pass, minimally)
--> refactor           (quality pass on green code)
--> doc-scribe (record the outcome)
-   -> human sign-off
--> ship (PR, CI, squash-merge, cleanup)
--> process-auditor (review the cycle, propose process changes)
+.claude-plugin/marketplace.json   marketplace "kw-agentic-dev"
+plugins/kw-ad/                    the plugin (the only part that ships)
+  agents/  skills/  hooks/  templates/
+tests/                            hook conformance cases + Node and Python suites
+scripts/vendor.sh                 plugin -> .claude/ exporter
+docs/                             architecture, roadmap, porting notes, trial runbook
 ```
 
-Orchestrated end-to-end by the `deliver` skill
-([`skills/deliver/SKILL.md`](skills/deliver/SKILL.md)). Two skills it
-calls, `new-branch` and `ship`, are also usable standalone.
+## Development
 
-Every `Edit`/`Write`/`Bash` call from `test-writer-red`,
-`implementer-green`, `refactor`, and `doc-scribe` is checked against a
-`PreToolUse` hook ([`hooks/agentscope/`](hooks/agentscope/)) — not just
-prompt-level restriction. The hook reads its rules from
-`.claude/agentic-dev/scope-rules.json` in the installing repo, so
-what's "in scope" for each stage is real config, not something baked
-into this plugin's own code.
+Work on this repo from a normal Claude Code session. It does not run
+its own pipeline on itself. Every script has tests:
 
-## Setup
+```sh
+node --test tests/node/*.test.mjs
+python -m unittest discover -s tests/python
+claude plugin validate . && claude plugin validate plugins/kw-ad
+```
 
-See [`templates/README.md`](templates/README.md) for the manual setup
-steps (there's no automated installer yet — that's
-[`docs/ROADMAP.md`](docs/ROADMAP.md) Phase 3). At minimum, you need to
-copy `templates/scope-rules.json` into
-`.claude/agentic-dev/scope-rules.json` in your repo and adapt it for
-your own languages and build commands — without that, the hook runs
-with no enforcement at all (a safe, loud-warning degradation, not a
-silent guess).
-
-## Why this exists
-
-Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the real design
-reasoning: why the hook is Node.js and not Go, the config schema, the
-tracker-abstraction approach, and two hard-won platform facts about
-Claude Code's own hook/permission behavior that this whole design
-depends on getting right.
+CI runs these on Linux, macOS, and Windows, from the oldest supported
+runtimes to current ones. See [CLAUDE.md](CLAUDE.md) for conventions,
+especially the rule that hook behavior changes start in
+`tests/hook-cases/`.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [LICENSE](LICENSE).

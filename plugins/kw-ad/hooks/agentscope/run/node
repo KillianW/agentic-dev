@@ -1,0 +1,17 @@
+// kw-ad scope hook launcher for Node. hooks.json runs
+// `<hook_runtime> <this dir>/<hook_runtime>`, so this file is named "node".
+// It is CommonJS (see ./package.json) and dynamically imports the ESM
+// implementation, which keeps it working on Node 18 without an extension.
+"use strict";
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+
+import(pathToFileURL(path.join(__dirname, "..", "js", "main.mjs")).href)
+  .then((m) => m.main(process.argv.slice(2)))
+  .then((code) => {
+    process.exitCode = code;
+  })
+  .catch((err) => {
+    process.stderr.write(`kw-ad: scope hook failed to start: ${err && err.stack ? err.stack : err}\n`);
+    process.exitCode = 2;
+  });

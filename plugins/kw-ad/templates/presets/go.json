@@ -1,0 +1,60 @@
+{
+  "$comment": "kw-ad scope rules preset: Go with a Makefile (the ruleset from the project this pipeline was extracted from). Replace the make targets with this repo's real commands; they are exact-match strings. See templates/README.md.",
+  "version": 1,
+  "unknown_agent_decision": "allow",
+  "agents": {
+    "tdd-red": {
+      "edit": {
+        "rules": [
+          { "match": ["**/*_test.go", "**/testdata/**"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-red may only edit *_test.go files or paths under testdata/" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["make test"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-red may only run \"make test\"" }
+      }
+    },
+    "tdd-green": {
+      "edit": {
+        "rules": [
+          { "match": ["**/*_test.go", "**/testdata/**"], "decision": "deny", "reason": "tdd-green may not edit tests or test fixtures" },
+          { "match": ["**/*.go"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-green may only edit non-test .go files" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["make build", "make vet", "make test", "make check"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-green may only run make build/vet/test/check" }
+      }
+    },
+    "tdd-refactor": {
+      "edit": {
+        "rules": [
+          { "match": ["**/*_test.go", "**/testdata/**", "Makefile"], "decision": "deny", "reason": "tdd-refactor may not edit tests, test fixtures, or the Makefile" },
+          { "match": ["**/*.go"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-refactor may only edit non-test .go files" }
+      },
+      "bash": {
+        "rules": [
+          { "match_exact": ["make build", "make vet", "make test", "make check", "make bench"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "tdd-refactor may only run make build/vet/test/check/bench" }
+      }
+    },
+    "scribe": {
+      "edit": {
+        "rules": [
+          { "match": ["docs/specifications/**", "docs/adr/**"], "decision": "deny", "reason": "scribe may not edit specs or recorded decisions -- a human edits those directly" },
+          { "match": ["**/*.md", "standards/*.yaml", "standards/*.yml"], "decision": "allow" }
+        ],
+        "default": { "decision": "deny", "reason": "scribe may only edit markdown files (anywhere) or standards/*.yaml" }
+      }
+    }
+  }
+}
